@@ -26,12 +26,15 @@ import java.util.Locale
 import java.util.UUID
 
 class MainActivity : AppCompatActivity(), OnMapReadyCallback {
-    private lateinit var mMap: GoogleMap
-    private var client: Mqtt5AsyncClient? = null
-    val pointsList = mutableListOf<CustomMarkerPoints>()
+
     private lateinit var databaseHelper: DatabaseHelper
-    private val devicesMap = mutableMapOf<String, Device>()
+    private var client: Mqtt5AsyncClient? = null
+    private lateinit var mMap: GoogleMap
     private var deviceAdapter:DeviceAdapter? = null
+
+    /* this list will store an object that represents a given device sending location info and will contain the min and max speed
+    - the min and max speed will be queried from the db
+     */
     private val devices:MutableList<Device> = mutableListOf()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,11 +54,12 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             .findFragmentById(R.id.map) as SupportMapFragment
         mapFragment.getMapAsync(this)
 
-        deviceAdapter = DeviceAdapter()
+        deviceAdapter = DeviceAdapter(this)
         val deviceLayout: RecyclerView = findViewById(R.id.rvDevices)
         deviceLayout.adapter = deviceAdapter
         deviceLayout.layoutManager = LinearLayoutManager(this)
 
+        /* SET UP BROKER */
         client = Mqtt5Client.builder()
             .identifier(UUID.randomUUID().toString())
             .serverHost("broker-816028524.sundaebytestt.com")
@@ -63,12 +67,15 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             .build()
             .toAsync()
 
+        /* CONNECT TO BROKER */
         try {
             client?.connect()
             Toast.makeText(this,"Successfully connected to broker", Toast.LENGTH_SHORT).show()
         } catch (e:Exception){
             Toast.makeText(this,"An error occurred when connecting to broker", Toast.LENGTH_SHORT).show()
         }
+
+        /* LISTEN TO MESSAGES FROM BROKER */
         try {
             client!!.subscribeWith()
                 .topicFilter("the/location")
@@ -78,18 +85,16 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
                     runOnUiThread {
                         handleIncomingData(payload)
                         drawPolyline()
-
-                        deviceAdapter?.updateList(devices)
                     }
                 }
                 .send()
-
             Toast.makeText(this,"Successfully subscribed to topic", Toast.LENGTH_SHORT).show()
         } catch (e:Exception){
             Toast.makeText(this,"An error occurred when subscribing to topic", Toast.LENGTH_SHORT).show()
         }
     }
 
+    /* PARSE INCOMING LOCATION INFORMATION AND ADD IT TO DATABASE */
     private fun handleIncomingData(payload: String) {
         try {
             val json = JSONObject(payload)
@@ -97,26 +102,28 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
             val latitude = json.getDouble("latitude")
             val longitude = json.getDouble("longitude")
             val speed = json.getDouble("speed")
-            val latLng = LatLng(latitude, longitude)
-            val dateTime = json.getInt("timestamp")
+            val dateTime = json.getLong("timestamp")
+
             databaseHelper.addData(studentID, latitude, longitude, speed, dateTime)
-            //val newCustomPoint = CustomMarkerPoints(pointsList.size + 1, latLng)
-            //pointsList.add(newCustomPoint) )
-            if (devicesMap.containsKey(studentID)) {
-                //updateDeviceSpeed(devicesMap[studentID]!!, speed)
-                val device = devicesMap[studentID]
+
+            /* update min and max speed for a device if it already exists */
+            if (isStudentIDExists(studentID)) {
+                val device = getDeviceByStudentID(studentID)
                 val speedRange = databaseHelper.getSpeedRangeForDevice(studentID)
                 if (speedRange != null) {
                     val (minSpeed, maxSpeed) = speedRange
                     device!!.minSpeed = minSpeed
                     device.maxSpeed = maxSpeed
                 }
-
-            } else {
+                deviceAdapter?.updateList(devices)
+            }
+            /* create a new device object if it does not exist */
+            else {
                 val newDevice = Device(studentID, speed, speed)
                 devices.add(newDevice)
-                devicesMap.put(studentID,newDevice)
+                deviceAdapter?.updateList(devices)
             }
+
         } catch (e:Exception) {
             Log.e("IncomingData", "Failed to parse data")
         }
@@ -124,6 +131,7 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
+        mMap.setBuildingsEnabled(false) // to avoid 3D buildings overlaying path when zoomed in
         val countryCenter = LatLng(10.483162, -61.263089)
         val zoomLevel = 10.0f
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(countryCenter, zoomLevel))
@@ -131,11 +139,10 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private fun drawPolyline() {
         val latLngPoints = databaseHelper.getAllLocations()
-        //val latLngPoints = pointsList.map { it.point }
         val polylineOptions = PolylineOptions()
             .addAll(latLngPoints)
-            .color(Color.BLUE)
-            .width(5f)
+            .color(Color.RED)
+            .width(20f)
             .geodesic(true)
 
         mMap.addPolyline(polylineOptions)
@@ -145,13 +152,13 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
         //mMap.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds.build(), 100))
     }
 
-    private fun updateDeviceSpeed(device: Device, newSpeed: Double) {
-        device.minSpeed = minOf(device.minSpeed, newSpeed)
-        device.maxSpeed = maxOf(device.maxSpeed, newSpeed)
+    /* HELPER METHOD TO GET DEVICE OBJECT BASED ON ITS STUDENT ID */
+    fun getDeviceByStudentID(studentID: String): Device? {
+        return devices.find { it.studentID == studentID }
     }
-    private fun convertTimeToReadableFormat(timestamp: Long): String {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) // Define your desired format
-        val date = Date(timestamp) // Convert the timestamp to a Date object
-        return dateFormat.format(date) // Return the formatted date as a string
+
+    /* HELPER METHOD TO CHECK IF A DEVICE WITH STUDENT ID EXISTS */
+    fun isStudentIDExists(studentID: String): Boolean {
+        return devices.any { it.studentID == studentID }
     }
 }

@@ -13,7 +13,7 @@ class DatabaseHelper(context: Context, factory: SQLiteDatabase.CursorFactory?):
     companion object {
         private var instance: DatabaseHelper? = null
 
-        // Singleton method to get the instance of DatabaseHelper
+        // Singleton so same db persists across activities
         fun getInstance(context: Context): DatabaseHelper {
             if (instance == null) {
                 instance = DatabaseHelper(context.applicationContext, null)
@@ -21,6 +21,7 @@ class DatabaseHelper(context: Context, factory: SQLiteDatabase.CursorFactory?):
             return instance!!
         }
     }
+
     override fun onCreate(db: SQLiteDatabase) {
         val createLocationDataTableQuery = ("CREATE TABLE LocationData (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -28,16 +29,15 @@ class DatabaseHelper(context: Context, factory: SQLiteDatabase.CursorFactory?):
                 "latitude REAL," +
                 "longitude REAL," +
                 "speed REAL," +
-                "dateTime INTEGER)")
+                "dateTime REAL)")
         db.execSQL(createLocationDataTableQuery)
         Log.d("DatabaseHelper", "LocationData table created successfully.")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-
     }
 
-    fun addData(studentID: String, latitude: Double, longitude: Double, speed: Double, dateTime: Int) {
+    fun addData(studentID: String, latitude: Double, longitude: Double, speed: Double, dateTime: Long) {
         val values = ContentValues().apply {
             put("studentID", studentID)
             put("latitude", latitude)
@@ -77,7 +77,7 @@ class DatabaseHelper(context: Context, factory: SQLiteDatabase.CursorFactory?):
         val db = this.readableDatabase
         val cursor = db.rawQuery(
                 "SELECT MIN(speed) AS minSpeed, MAX(speed) AS maxSpeed FROM LocationData WHERE studentID = ? AND dateTime BETWEEN ? AND ?", arrayOf(studentID, startDateTime.toString(), endDateTime.toString()))
-        Log.d("App", "app made it here")
+
         if(!(!cursor.moveToFirst() || cursor.count == 0)){
             do {
                 val minSpeed = cursor.getDouble(cursor.getColumnIndexOrThrow("minSpeed"))
@@ -126,6 +126,7 @@ class DatabaseHelper(context: Context, factory: SQLiteDatabase.CursorFactory?):
                 if (latitudeIndex >= 0 && longitudeIndex >= 0){
                     val latitude = cursor.getDouble(latitudeIndex)
                     val longitude = cursor.getDouble(longitudeIndex)
+
                     points.add(LatLng(latitude,longitude))
                 }
             } while (cursor.moveToNext())

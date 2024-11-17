@@ -1,6 +1,7 @@
 package com.example.subscriberapplication
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.view.LayoutInflater
 import android.view.View
@@ -9,7 +10,7 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
-class DeviceAdapter : RecyclerView.Adapter<DeviceAdapter.ViewHolder>() {
+class DeviceAdapter(private val context: Context) : RecyclerView.Adapter<DeviceAdapter.ViewHolder>() {
     private val deviceList:MutableList<Device> = mutableListOf()
     class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val tvStudentID: TextView = itemView.findViewById(R.id.tvStudentID)
@@ -26,15 +27,14 @@ class DeviceAdapter : RecyclerView.Adapter<DeviceAdapter.ViewHolder>() {
         val device = deviceList[position]
 
         holder.tvStudentID.text = device.studentID
-        holder.tvMinSpeed.text = "Min Speed: ${device.minSpeed} Km/h"
-        holder.tvMaxSpeed.text = "Max Speed: ${device.minSpeed} Km/h"
+        holder.tvMinSpeed.text = context.getString(R.string.min_speed_label, device.minSpeed)
+        holder.tvMaxSpeed.text = context.getString(R.string.max_speed_label, device.maxSpeed)
 
         holder.btnViewMore.setOnClickListener {
-            // Create an Intent to open DeviceReportActivity
             val context = holder.itemView.context
             val intent = Intent(context, DeviceReportActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-            // Pass the device ID and other necessary information to the new activity
+            // Pass the device student id to the new activity
             intent.putExtra("studentID", device.studentID)  // You can pass additional data if needed
             context.startActivity(intent)
         }
