@@ -32,8 +32,9 @@ class MainActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var mMap: GoogleMap
     private var deviceAdapter:DeviceAdapter? = null
 
-    /* this list will store an object that represents a given device sending location info and will contain the min and max speed
-    - the min and max speed will be queried from the db
+    /* this list is what the device adapter will use to pass to the recycler view
+    - it stores a given device associated with one student ID
+    - the min and max speed will be queried from the database
      */
     private val devices:MutableList<Device> = mutableListOf()
 
